@@ -60,7 +60,7 @@ WEEKLY_ORDER_LIMIT = 5
 
 
 def get_db():
-    db = sqlite3.connect(DB_PATH)
+    db = sqlite3.connect(DB_PATH, timeout=10.0)  # 10 second timeout
     db.row_factory = sqlite3.Row
     return db
 
@@ -232,117 +232,122 @@ def count_orders_this_week(phone):
 
 async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming Telegram messages from admins."""
-    print(Fore.CYAN + "[Waakye] Received webhook update")
-    if not update.message or not update.message.text:
-        return
-
-    chat_id = str(update.effective_chat.id)
-    print(Fore.CYAN + f"[Waakye] Chat ID: {chat_id}")
-
-    if chat_id not in TELEGRAM_CHAT_IDS:
-        await telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
-        return
-
-    text = update.message.text.strip().upper()
-    parts = text.split()
-    print(Fore.CYAN + f"[Waakye] Command: {parts}")
-
-    if len(parts) < 2:
-        await telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
-        return
-
-    command = parts[0]
-    order_id = parts[1]
-
-    if command == "CONFIRM":
-        # ─── Database operations in a thread ─────────────────
-        def get_order():
-            with get_db() as db:
-                return db.execute(
-                    "SELECT status, admin_confirms FROM orders WHERE order_id=?",
-                    (order_id,)
-                ).fetchone()
-
-        def update_order(new_confirms):
-            with get_db() as db:
-                db.execute(
-                    "UPDATE orders SET admin_confirms=?, status='confirmed' WHERE order_id=?",
-                    (new_confirms, order_id)
-                )
-
-        row = await asyncio.to_thread(get_order)
-        if not row:
-            await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
-            return
-        if row["status"] not in ("pending",):
-            await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+    try:
+        print(Fore.CYAN + "[Waakye] Received webhook update")
+        if not update.message or not update.message.text:
             return
 
-        confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
-        confirmed_ids.add(chat_id)
-        new_confirms = ",".join(confirmed_ids)
+        chat_id = str(update.effective_chat.id)
+        print(Fore.CYAN + f"[Waakye] Chat ID: {chat_id}")
 
-        await asyncio.to_thread(update_order, new_confirms)
-
-        await telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
-
-    elif command == "REJECT":
-        def get_order_status():
-            with get_db() as db:
-                return db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
-
-        def delete_order():
-            with get_db() as db:
-                db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-
-        row = await asyncio.to_thread(get_order_status)
-        if not row:
-            await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
-            return
-        if row["status"] not in ("pending",):
-            await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+        if chat_id not in TELEGRAM_CHAT_IDS:
+            await telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
             return
 
-        await asyncio.to_thread(delete_order)
-        await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
+        text = update.message.text.strip().upper()
+        parts = text.split()
+        print(Fore.CYAN + f"[Waakye] Command: {parts}")
 
-    elif command == "DELIVERED":
-        def get_order():
-            with get_db() as db:
-                return db.execute(
-                    "SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?",
-                    (order_id,)
-                ).fetchone()
-
-        def update_status(status):
-            with get_db() as db:
-                db.execute(
-                    "UPDATE orders SET status=? WHERE order_id=?",
-                    (status, order_id)
-                )
-
-        def delete_order():
-            with get_db() as db:
-                db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-
-        row = await asyncio.to_thread(get_order)
-        if not row:
-            await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+        if len(parts) < 2:
+            await telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
             return
 
-        if row["status"] != "confirmed":
-            await telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
-            return
+        command = parts[0]
+        order_id = parts[1]
 
-        if row["user_confirmed_delivered"] == 1:
+        if command == "CONFIRM":
+            # ─── Database operations in a thread ─────────────────
+            def get_order():
+                with get_db() as db:
+                    return db.execute(
+                        "SELECT status, admin_confirms FROM orders WHERE order_id=?",
+                        (order_id,)
+                    ).fetchone()
+
+            def update_order(new_confirms):
+                with get_db() as db:
+                    db.execute(
+                        "UPDATE orders SET admin_confirms=?, status='confirmed' WHERE order_id=?",
+                        (new_confirms, order_id)
+                    )
+
+            row = await asyncio.to_thread(get_order)
+            if not row:
+                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                return
+            if row["status"] not in ("pending",):
+                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                return
+
+            confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
+            confirmed_ids.add(chat_id)
+            new_confirms = ",".join(confirmed_ids)
+
+            await asyncio.to_thread(update_order, new_confirms)
+
+            await telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
+
+        elif command == "REJECT":
+            def get_order_status():
+                with get_db() as db:
+                    return db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
+
+            def delete_order():
+                with get_db() as db:
+                    db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
+
+            row = await asyncio.to_thread(get_order_status)
+            if not row:
+                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                return
+            if row["status"] not in ("pending",):
+                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                return
+
             await asyncio.to_thread(delete_order)
-            await telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
-        else:
-            await asyncio.to_thread(update_status, 'admin_delivered')
-            await telegram_bot.send_message(chat_id=chat_id, text=f"Delivery recorded. Waiting for customer to confirm on the tracking page.")
-    else:
-        await telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
+            await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
 
+        elif command == "DELIVERED":
+            def get_order():
+                with get_db() as db:
+                    return db.execute(
+                        "SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?",
+                        (order_id,)
+                    ).fetchone()
+
+            def update_status(status):
+                with get_db() as db:
+                    db.execute(
+                        "UPDATE orders SET status=? WHERE order_id=?",
+                        (status, order_id)
+                    )
+
+            def delete_order():
+                with get_db() as db:
+                    db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
+
+            row = await asyncio.to_thread(get_order)
+            if not row:
+                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                return
+
+            if row["status"] != "confirmed":
+                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
+                return
+
+            if row["user_confirmed_delivered"] == 1:
+                await asyncio.to_thread(delete_order)
+                await telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
+            else:
+                await asyncio.to_thread(update_status, 'admin_delivered')
+                await telegram_bot.send_message(chat_id=chat_id, text=f"Delivery recorded. Waiting for customer to confirm on the tracking page.")
+        else:
+            await telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
+
+    except Exception as e:
+        print(Fore.RED + f"[Waakye] Handler error: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 
@@ -975,14 +980,13 @@ def telegram_webhook():
     """Webhook endpoint for Telegram bot updates."""
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Submit the handler to the background loop
-        future = run_async(handle_telegram_message(update, None))
-        # Wait for it to finish (up to 10 seconds) and catch any exceptions
-        future.result(timeout=5)
+        # Fire and forget – do NOT wait for completion
+        run_async(handle_telegram_message(update, None))
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
         traceback.print_exc()
+    # Respond immediately to avoid Telegram timeout
     return "OK", 200
 
 
