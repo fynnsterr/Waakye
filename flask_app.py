@@ -31,6 +31,9 @@ ADMIN_KEY = os.getenv("ADMIN_KEY", "changeme")
 telegram_bot = None
 telegram_app = None
 
+# Track processed message IDs to prevent duplicate processing
+processed_message_ids = set()
+
 if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS:
     try:
         telegram_bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -198,6 +201,12 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
     """Handle incoming Telegram messages from admins."""
     if not update.message or not update.message.text:
         return
+
+    # Deduplicate messages using message_id
+    message_id = update.message.message_id
+    if message_id in processed_message_ids:
+        return
+    processed_message_ids.add(message_id)
 
     chat_id = str(update.effective_chat.id)
     if chat_id not in TELEGRAM_CHAT_IDS:
