@@ -34,6 +34,9 @@
       background: var(--warm);
       color: var(--dark);
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
     }
 
     /* ─── Hero ─────────────────────────────────────────────── */
@@ -730,6 +733,154 @@
     .op-telecel  { background: #E30613; color: #fff; }
     .op-airteltigo { background: #0057A8; color: #fff; }
     .op-unknown  { background: #555;    color: #fff; }
+
+    /* ─── Mobile optimizations ───────────────────────────────── */
+    @media (max-width: 480px) {
+      .hero {
+        padding: 32px 20px 40px;
+      }
+
+      .hero-eyebrow {
+        font-size: 9px;
+        padding: 4px 10px;
+        margin-bottom: 12px;
+      }
+
+      .hero-title {
+        font-size: clamp(32px, 8vw, 42px);
+        letter-spacing: -1.5px;
+        margin-bottom: 16px;
+      }
+
+      .hero-subtitle {
+        font-size: 13px;
+        margin-bottom: 20px;
+      }
+
+      .hero-badge {
+        font-size: 11px;
+        padding: 5px 12px;
+      }
+
+      .page {
+        padding: 24px 16px 40px;
+      }
+
+      .card {
+        padding: 20px 18px;
+        border-radius: 16px;
+      }
+
+      .card-title {
+        font-size: 14px;
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+      }
+
+      .pkg-grid {
+        gap: 10px;
+      }
+
+      .pkg-card {
+        padding: 16px 14px;
+      }
+
+      .pkg-emoji {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+
+      .pkg-name {
+        font-size: 13px;
+      }
+
+      .pkg-desc {
+        font-size: 10px;
+      }
+
+      .pkg-price {
+        font-size: 22px;
+      }
+
+      .cond-grid {
+        gap: 6px;
+      }
+
+      .cond-item {
+        padding: 8px 10px;
+      }
+
+      .cond-name {
+        font-size: 12px;
+      }
+
+      .cond-price {
+        font-size: 10px;
+      }
+
+      .qty-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 15px;
+      }
+
+      .qty-value {
+        font-size: 14px;
+        min-width: 20px;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        font-size: 16px;
+        padding: 12px 14px;
+      }
+
+      .form-group label {
+        font-size: 10px;
+      }
+
+      .summary-wrap {
+        padding: 16px 18px;
+      }
+
+      .summary-row {
+        font-size: 14px;
+      }
+
+      .summary-row.total-row {
+        font-size: 20px;
+      }
+
+      .order-btn {
+        padding: 16px;
+        font-size: 15px;
+      }
+
+      .info-box {
+        font-size: 12px;
+        padding: 10px 12px;
+      }
+
+      .section-divider {
+        font-size: 10px;
+        margin: 18px 0 12px;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .hero-title {
+        font-size: 28px;
+      }
+
+      .pkg-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .cond-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
