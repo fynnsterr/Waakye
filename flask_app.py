@@ -220,19 +220,20 @@ def count_orders_this_week(phone):
 # ─── Telegram Bot Handler ───────────────────────────────────────────────────────
 
 async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle incoming Telegram messages from admins."""
     if not update.message or not update.message.text:
         return
 
     chat_id = str(update.effective_chat.id)
     if chat_id not in TELEGRAM_CHAT_IDS:
-        await telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
+        telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
         return
 
     text = update.message.text.strip().upper()
     parts = text.split()
 
     if len(parts) < 2:
-        await telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
+        telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
         return
 
     command = parts[0]
@@ -246,10 +247,10 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             ).fetchone()
 
             if not row:
-                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                 return
             if row["status"] not in ("pending",):
-                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
                 return
 
             confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
@@ -261,7 +262,7 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
                 (new_confirms, order_id)
             )
 
-        await telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
+        telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
 
     elif command == "REJECT":
         with get_db() as db:
@@ -271,15 +272,15 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             ).fetchone()
 
             if not row:
-                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                 return
             if row["status"] not in ("pending",):
-                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
                 return
 
             db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
 
-        await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
+        telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
 
     elif command == "DELIVERED":
         with get_db() as db:
@@ -289,24 +290,26 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             ).fetchone()
 
             if not row:
-                await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                 return
 
             if row["status"] != "confirmed":
-                await telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
+                telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
                 return
 
             if row["user_confirmed_delivered"] == 1:
                 db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-                await telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
+                telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
             else:
                 db.execute(
                     "UPDATE orders SET status='admin_delivered' WHERE order_id=?",
                     (order_id,)
                 )
-                await telegram_bot.send_message(chat_id=chat_id, text=f"Delivery recorded. Waiting for customer to confirm on the tracking page.")
+                telegram_bot.send_message(chat_id=chat_id, text=f"Delivery recorded. Waiting for customer to confirm on the tracking page.")
     else:
-        await telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
+        telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
+
+
 
 # ─── Telegram Webhook Setup ───────────────────────────────────────────────────
 
@@ -937,14 +940,12 @@ def telegram_webhook():
     """Webhook endpoint for Telegram bot updates."""
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Create a simple context object
-        class SimpleContext:
-            pass
-        context = SimpleContext()
-        # Handle the update synchronously
-        asyncio.run(handle_telegram_message(update, context))
+        # Run the handler synchronously using asyncio.run()
+        asyncio.run(handle_telegram_message(update, None))
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
+        import traceback
+        traceback.print_exc()
     return "OK", 200
 
 
