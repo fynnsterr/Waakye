@@ -81,8 +81,10 @@ def init_db():
             );
 
             CREATE TABLE IF NOT EXISTS telegram_message_ids (
-                message_id INTEGER PRIMARY KEY,
-                processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+                message_id INTEGER,
+                chat_id TEXT,
+                processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (message_id, chat_id)
             );
         """)
         # Migrate existing DBs that don't have new columns yet
@@ -97,6 +99,24 @@ def init_db():
         for col, sql in migrations.items():
             if col not in existing:
                 db.execute(sql)
+
+        # Migrate telegram_message_ids table if it exists with old schema
+        tg_table_exists = db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='telegram_message_ids'"
+        ).fetchone()
+        if tg_table_exists:
+            tg_columns = {row[1] for row in db.execute("PRAGMA table_info(telegram_message_ids)").fetchall()}
+            if "chat_id" not in tg_columns:
+                # Drop old table and recreate with new schema
+                db.execute("DROP TABLE telegram_message_ids")
+                db.execute("""
+                    CREATE TABLE telegram_message_ids (
+                        message_id INTEGER,
+                        chat_id TEXT,
+                        processed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                        PRIMARY KEY (message_id, chat_id)
+                    )
+                """)
 
 
 # ─── OOP: Menu Item Hierarchy ──────────────────────────────────────────────────
@@ -203,20 +223,6 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
     """Handle incoming Telegram messages from admins."""
     if not update.message or not update.message.text:
         return
-
-    # Deduplicate messages using message_id stored in database
-    message_id = update.message.message_id
-    with get_db() as db:
-        existing = db.execute(
-            "SELECT message_id FROM telegram_message_ids WHERE message_id=?",
-            (message_id,)
-        ).fetchone()
-        if existing:
-            return
-        db.execute(
-            "INSERT INTO telegram_message_ids (message_id) VALUES (?)",
-            (message_id,)
-        )
 
     chat_id = str(update.effective_chat.id)
     if chat_id not in TELEGRAM_CHAT_IDS:
