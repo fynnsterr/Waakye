@@ -31,9 +31,6 @@ ADMIN_KEY = os.getenv("ADMIN_KEY", "changeme")
 telegram_bot = None
 telegram_app = None
 
-# Track processed message IDs to prevent duplicate processing
-processed_message_ids = set()
-
 if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS:
     try:
         telegram_bot = Bot(token=TELEGRAM_BOT_TOKEN)
@@ -81,6 +78,11 @@ def init_db():
                 admin_confirms        TEXT NOT NULL DEFAULT '',
                 user_confirmed_delivered INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (phone) REFERENCES customers(phone)
+            );
+
+            CREATE TABLE IF NOT EXISTS telegram_message_ids (
+                message_id INTEGER PRIMARY KEY,
+                processed_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
         """)
         # Migrate existing DBs that don't have new columns yet
@@ -202,11 +204,19 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
     if not update.message or not update.message.text:
         return
 
-    # Deduplicate messages using message_id
+    # Deduplicate messages using message_id stored in database
     message_id = update.message.message_id
-    if message_id in processed_message_ids:
-        return
-    processed_message_ids.add(message_id)
+    with get_db() as db:
+        existing = db.execute(
+            "SELECT message_id FROM telegram_message_ids WHERE message_id=?",
+            (message_id,)
+        ).fetchone()
+        if existing:
+            return
+        db.execute(
+            "INSERT INTO telegram_message_ids (message_id) VALUES (?)",
+            (message_id,)
+        )
 
     chat_id = str(update.effective_chat.id)
     if chat_id not in TELEGRAM_CHAT_IDS:
