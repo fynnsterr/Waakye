@@ -148,13 +148,14 @@
     }
 
     /* ─── Layout ────────────────────────────────────────────── */
-    .page { max-width: 1100px; margin: 0 auto; padding: 36px 24px 60px; width: 100%; box-sizing: border-box; }
+    .page { margin: 0 auto; padding: 36px 24px 60px; width: 100%; max-width: 1100px; box-sizing: border-box; }
 
     .grid {
       display: grid;
       grid-template-columns: 1.45fr 1fr;
       gap: 24px;
       align-items: start;
+      width: 100%;
     }
 
     @media (max-width: 780px) { .grid { grid-template-columns: 1fr; } }
@@ -164,7 +165,7 @@
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 20px;
-      padding: 28px 28px 24px;
+      padding: 28px 24px 24px;
       box-shadow: var(--shadow-card);
     }
 
@@ -737,7 +738,11 @@
     /* ─── Mobile optimizations ───────────────────────────────── */
     @media (max-width: 480px) {
       .hero {
-        padding: 32px 20px 40px;
+        padding: 32px 0 40px;
+      }
+
+      .hero-inner {
+        padding: 0 16px;
       }
 
       .hero-eyebrow {
@@ -767,7 +772,7 @@
       }
 
       .card {
-        padding: 20px 18px;
+        padding: 20px 16px;
         border-radius: 16px;
       }
 
