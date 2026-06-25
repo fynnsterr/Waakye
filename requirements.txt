@@ -3,3 +3,4 @@ phonenumbers
 colorama
 python-telegram-bot>=20.0
 python-dotenv
+gunicorn
