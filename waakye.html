@@ -44,7 +44,7 @@
       background: var(--dark);
       position: relative;
       overflow: hidden;
-      padding: 48px 40px 56px;
+      padding: 48px 0 56px;
     }
 
     /* Noise/grain texture overlay */
@@ -78,7 +78,7 @@
       pointer-events: none;
     }
 
-    .hero-inner { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }
+    .hero-inner { position: relative; z-index: 1; width: 100%; padding: 0 24px; }
 
     .hero-eyebrow {
       display: inline-flex;
@@ -148,7 +148,7 @@
     }
 
     /* ─── Layout ────────────────────────────────────────────── */
-    .page { max-width: 1100px; margin: 0 auto; padding: 36px 24px 60px; }
+    .page { max-width: 1100px; margin: 0 auto; padding: 36px 24px 60px; width: 100%; box-sizing: border-box; }
 
     .grid {
       display: grid;
@@ -971,7 +971,7 @@
           </div>
 
           <div class="info-box" style="background: var(--gold-light); border-color: var(--gold);">
-            <strong>Delivery:</strong> ₵10 flat fee. Delivered every <strong>Saturday</strong>.
+            <strong>Delivery:</strong> <strong>₵10 flat fee</strong>. Delivered every <strong>Saturday</strong>.
             Questions? Call/WhatsApp <strong>0503736616 / 0557394091</strong>
           </div>
 
