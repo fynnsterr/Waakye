@@ -1063,6 +1063,156 @@
         font-size: 24px !important;
       }
     }
+    /* ─── DESKTOP VIEW (screens wider than 768px) ─────────────── */
+    @media (min-width: 769px) {
+      html, body {
+        background: #E8E0D5;  /* Soft background to frame the content */
+      }
+
+      .hero {
+        padding: 60px 0 50px;
+      }
+
+      .hero-inner {
+        max-width: 1000px !important;
+        margin: 0 auto !important;
+        padding: 0 40px !important;
+      }
+
+      .hero-title {
+        font-size: 56px !important;
+      }
+
+      .page {
+        max-width: 1000px !important;
+        margin: 0 auto !important;
+        padding: 40px 40px 60px !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      .grid {
+        display: grid !important;
+        grid-template-columns: 1.4fr 1fr !important;
+        gap: 30px !important;
+        align-items: start !important;
+      }
+
+      .card {
+        padding: 32px !important;
+        border-radius: 24px !important;
+        box-shadow: 0 4px 40px rgba(0,0,0,0.08) !important;
+      }
+
+      .pkg-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 16px !important;
+      }
+
+      .pkg-card {
+        padding: 24px 20px !important;
+      }
+
+      .pkg-card:hover {
+        transform: translateY(-4px) !important;
+      }
+
+      .cond-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+      }
+
+      .cond-item {
+        padding: 10px 14px !important;
+      }
+
+      .cond-name {
+        font-size: 13px !important;
+        white-space: nowrap !important;
+        max-width: 100% !important;
+      }
+
+      .cond-price {
+        font-size: 11px !important;
+      }
+
+      .qty-btn {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 15px !important;
+      }
+
+      .qty-value {
+        font-size: 14px !important;
+        min-width: 20px !important;
+      }
+
+      .form-row {
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 16px !important;
+      }
+
+      .form-group input,
+      .form-group select,
+      .form-group textarea {
+        font-size: 14px !important;
+        padding: 12px 16px !important;
+      }
+
+      .summary-wrap {
+        padding: 24px 28px !important;
+      }
+
+      .summary-row {
+        font-size: 14px !important;
+        padding: 8px 0 !important;
+      }
+
+      .summary-row.total-row {
+        font-size: 24px !important;
+      }
+
+      .order-btn {
+        padding: 18px !important;
+        font-size: 15px !important;
+      }
+
+      .order-btn:not(:disabled):hover {
+        transform: translateY(-2px) !important;
+      }
+
+      .info-box {
+        font-size: 13px !important;
+        padding: 14px 18px !important;
+      }
+
+      .modal {
+        padding: 40px 48px !important;
+        max-width: 480px !important;
+      }
+
+      /* Fix the "sticky" position on desktop */
+      .card[style*="sticky"] {
+        position: sticky !important;
+        top: 20px !important;
+      }
+    }
+
+    /* ─── LARGE DESKTOP (1200px and above) ────────────────────── */
+    @media (min-width: 1200px) {
+      .hero-inner {
+        max-width: 1100px !important;
+      }
+
+      .page {
+        max-width: 1100px !important;
+      }
+
+      .grid {
+        gap: 40px !important;
+      }
+    }
   </style>
 </head>
 <body>
