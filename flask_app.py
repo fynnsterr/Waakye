@@ -232,16 +232,20 @@ def count_orders_this_week(phone):
 
 async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming Telegram messages from admins."""
+    print(Fore.CYAN + "[Waakye] Received webhook update")  # ← ADD THIS
     if not update.message or not update.message.text:
         return
 
     chat_id = str(update.effective_chat.id)
+    print(Fore.CYAN + f"[Waakye] Chat ID: {chat_id}")      # ← ADD THIS
+
     if chat_id not in TELEGRAM_CHAT_IDS:
         await telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
         return
 
     text = update.message.text.strip().upper()
     parts = text.split()
+    print(Fore.CYAN + f"[Waakye] Command: {parts}")        # ← ADD THIS
 
     if len(parts) < 2:
         await telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
@@ -950,8 +954,10 @@ def telegram_webhook():
     """Webhook endpoint for Telegram bot updates."""
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Run the handler in the background loop – no asyncio.run() here!
-        run_async(handle_telegram_message(update, None))
+        # Submit the handler to the background loop
+        future = run_async(handle_telegram_message(update, None))
+        # Wait for it to finish (up to 10 seconds) and catch any exceptions
+        future.result(timeout=10)
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
