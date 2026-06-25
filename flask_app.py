@@ -16,6 +16,17 @@ from dotenv import load_dotenv
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
+import asyncio
+import threading
+
+# ─── Create a background event loop that runs forever ────────
+_loop = asyncio.new_event_loop()
+_thread = threading.Thread(target=_loop.run_forever, daemon=True)
+_thread.start()
+
+def run_async(coro):
+    """Submit a coroutine to the background event loop."""
+    return asyncio.run_coroutine_threadsafe(coro, _loop)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -939,8 +950,8 @@ def telegram_webhook():
     """Webhook endpoint for Telegram bot updates."""
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Run the handler synchronously using asyncio.run()
-        asyncio.run(handle_telegram_message(update, None))
+        # Run the handler in the background loop – no asyncio.run() here!
+        run_async(handle_telegram_message(update, None))
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
