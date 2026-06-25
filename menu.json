@@ -1,0 +1,35 @@
+{
+  "packages": {
+    "semi":   { "name": "Semi Loaded",   "price": 50, "includes": "Waakye, spaghetti, gari, 2 eggs, sausage, meat or fish" },
+    "loaded": { "name": "Loaded Loaded", "price": 60, "includes": "Waakye, spaghetti, gari, fish, meat, sausage, egg" }
+  },
+  "condiments": {
+    "waakye":      { "name": "Waakye",          "price": 15.0 },
+    "fried_fish":  { "name": "Fried Fish",       "price": 15.0 },
+    "fried_meat":  { "name": "Fried Meat",       "price": 15.0 },
+    "fried_chick": { "name": "Fried Chicken",    "price": 15.0 },
+    "intestines":  { "name": "Fried Intestines", "price": 15.0 },
+    "boiled_egg":  { "name": "Boiled Egg",       "price":  5.0 },
+    "wele":        { "name": "Wele",             "price": 10.0 },
+    "spaghetti":   { "name": "Spaghetti",        "price":  2.0 },
+    "gari":        { "name": "Gari",             "price":  2.0 },
+    "salad":       { "name": "Salad",            "price":  5.0 },
+    "sausage":     { "name": "Sausage",          "price":  4.0 },
+    "plantain":    { "name": "Plantain",         "price":  2.0 },
+    "avocado":     { "name": "Avocado",          "price":  3.0 }
+  },
+  "hostels": [
+    "Dufie Annex",
+    "Old Masere",
+    "New Hosanna",
+    "Old Hossana",
+    "Dufie Main",
+    "New Masere",
+    "Charlotte",
+    "Ceewus",
+    "Hillside",
+    "Queenstar",
+    "On-Campus"
+  ],
+  "delivery_fee": 10.0
+}

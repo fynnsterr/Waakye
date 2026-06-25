@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Track Your Orders — Waakye</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --gold:       #D4A017;
+      --gold-light: #F5E6A8;
+      --gold-dark:  #A07800;
+      --dark:       #0F0C06;
+      --dark2:      #1A1208;
+      --warm:       #FAF6EC;
+      --card:       #FFFDF5;
+      --red:        #C0392B;
+      --green:      #27754B;
+      --orange:     #C46A00;
+      --muted:      #7A6A50;
+      --border:     rgba(212,160,23,0.18);
+      --border2:    rgba(212,160,23,0.38);
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--warm);
+      color: var(--dark);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── Header ─────────────────────────────────────────────── */
+    .header {
+      background: var(--dark);
+      padding: 24px 20px;
+      text-align: center;
+    }
+    .header h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    .header h1 span { color: var(--gold); }
+    .header p { color: rgba(255,255,255,0.6); font-size: 13px; margin-top: 6px; }
+
+    /* ─── Main ───────────────────────────────────────────────── */
+    .main {
+      flex: 1;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+      width: 100%;
+    }
+
+    /* ─── Card ───────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      box-shadow: 0 2px 16px rgba(20,16,8,0.08);
+    }
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    /* ─── Form ───────────────────────────────────────────────── */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+    }
+    .form-group input {
+      background: #fff;
+      border: 1.5px solid var(--border2);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 16px;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--dark);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+    .form-group input:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 3px rgba(212,160,23,0.12);
+    }
+
+    /* ─── Button ─────────────────────────────────────────────── */
+    .track-btn {
+      width: 100%;
+      padding: 16px;
+      background: var(--gold);
+      color: var(--dark);
+      font-family: 'Syne', sans-serif;
+      font-size: 15px;
+      font-weight: 800;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+    .track-btn:hover:not(:disabled) {
+      background: var(--gold-dark);
+      color: #fff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(160,120,0,0.35);
+    }
+    .track-btn:disabled {
+      background: rgba(212,160,23,0.3);
+      cursor: not-allowed;
+      color: rgba(20,16,8,0.4);
+    }
+
+    /* ─── Spinner ────────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2.5px solid rgba(20,16,8,0.25);
+      border-top-color: var(--dark);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    /* ─── Banners ────────────────────────────────────────────── */
+    .banner {
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      line-height: 1.45;
+    }
+    .banner.error   { background: #FFF0EE; border: 1.5px solid #E8978E; color: var(--red); }
+    .banner.warning { background: #FFF8EC; border: 1.5px solid #E8C97E; color: var(--orange); }
+    .banner.success { background: #EFF8F2; border: 1.5px solid #7EC89A; color: var(--green); }
+    .banner.show    { display: flex; }
+
+    /* ─── Weekly quota bar ───────────────────────────────────── */
+    .quota-wrap {
+      display: none;
+      margin-bottom: 20px;
+    }
+    .quota-wrap.show { display: block; }
+    .quota-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .quota-label span:last-child { font-weight: 700; color: var(--dark); }
+    .quota-bar-bg {
+      height: 6px;
+      background: rgba(212,160,23,0.15);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .quota-bar-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 99px;
+      transition: width 0.4s ease;
+    }
+    .quota-bar-fill.full { background: var(--red); }
+
+    /* ─── Results area ───────────────────────────────────────── */
+    .results-area {
+      display: none;
+      margin-top: 28px;
+    }
+    .results-area.show { display: block; }
+
+    /* ─── Week group ─────────────────────────────────────────── */
+    .week-group { margin-bottom: 28px; }
+    .week-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .week-label {
+      font-family: 'Syne', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .week-divider {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .week-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(212,160,23,0.12);
+      color: var(--gold-dark);
+      padding: 3px 9px;
+      border-radius: 20px;
+    }
+
+    /* ─── Order card ─────────────────────────────────────────── */
+    .order-card {
+      background: var(--dark);
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 12px;
+    }
+    .order-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      gap: 10px;
+    }
+    .order-id-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .order-id-num {
+      font-family: 'Syne', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--gold);
+      letter-spacing: -0.5px;
+    }
+    .order-ts {
+      font-size: 11px;
+      color: rgba(255,255,255,0.38);
+    }
+
+    /* ─── Status badges ──────────────────────────────────────── */
+    .status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 5px 11px;
+      border-radius: 20px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .status-pending   { background: rgba(212,160,23,0.18); color: var(--gold); border: 1px solid rgba(212,160,23,0.4); }
+    .status-confirmed { background: rgba(39,117,75,0.2);   color: #5DC98A;     border: 1px solid rgba(39,117,75,0.4); }
+    .status-admin_delivered { background: rgba(100,120,220,0.18); color: #99AAFF; border: 1px solid rgba(100,120,220,0.4); }
+    .status-cancelled { background: rgba(192,57,43,0.18); color: var(--red); border: 1px solid rgba(192,57,43,0.4); }
+    .status-rejected  { background: rgba(192,57,43,0.18); color: var(--red); border: 1px solid rgba(192,57,43,0.4); }
+
+    /* ─── Receipt rows ───────────────────────────────────────── */
+    .receipt-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      font-size: 12.5px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      color: #ccc;
+      gap: 12px;
+    }
+    .receipt-row:last-child { border: none; }
+    .receipt-row span:first-child { color: #666; flex-shrink: 0; }
+    .receipt-row span:last-child  { text-align: right; }
+    .receipt-row.total-row {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--gold);
+      margin-top: 6px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .receipt-row.total-row span:first-child { color: var(--gold); }
+
+    .items-divider {
+      margin: 8px 0;
+      border-top: 1px dashed rgba(255,255,255,0.08);
+    }
+
+    /* ─── Deliver btn ────────────────────────────────────────── */
+    .deliver-btn {
+      margin-top: 14px;
+      width: 100%;
+      padding: 12px;
+      background: transparent;
+      border: 1.5px solid rgba(39,117,75,0.5);
+      color: #5DC98A;
+      font-family: 'Syne', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.4px;
+    }
+    .deliver-btn:hover:not(:disabled) {
+      background: rgba(39,117,75,0.15);
+      border-color: #5DC98A;
+      transform: translateY(-1px);
+    }
+    .deliver-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .deliver-btn.waiting {
+      border-color: rgba(100,120,220,0.4);
+      color: #99AAFF;
+    }
+
+    /* ─── Cancel btn ─────────────────────────────────────────── */
+    .cancel-btn {
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background: transparent;
+      border: 1.5px solid rgba(192,57,43,0.5);
+      color: var(--red);
+      font-family: 'Syne', sans-serif;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.4px;
+    }
+    .cancel-btn:hover:not(:disabled) {
+      background: rgba(192,57,43,0.15);
+      border-color: var(--red);
+      transform: translateY(-1px);
+    }
+    .cancel-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ─── Pending note ───────────────────────────────────────── */
+    .pending-note {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: rgba(212,160,23,0.07);
+      border-radius: 8px;
+      font-size: 11.5px;
+      color: rgba(255,255,255,0.45);
+      line-height: 1.5;
+    }
+
+    /* ─── Back link ─────────────────────────────────────────── */
+    .back-link {
+      text-align: center;
+      margin-top: 24px;
+    }
+    .back-link a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s;
+    }
+    .back-link a:hover { color: var(--gold); }
+
+    /* ─── Empty state ────────────────────────────────────────── */
+    .empty-state {
+      text-align: center;
+      padding: 32px 0 8px;
+      color: rgba(255,255,255,0.3);
+      font-size: 13px;
+    }
+    .empty-state .emoji { font-size: 40px; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h1>Waakye <span>Tracker</span></h1>
+    <p>Enter your phone number to view all your orders</p>
+  </div>
+
+  <div class="main">
+    <div class="card">
+      <div class="card-title">Your Orders</div>
+
+      <div class="banner error" id="errorBanner">
+        <span>⚠️</span>
+        <span id="errorMsg"></span>
+      </div>
+
+      <div class="banner warning" id="limitBanner">
+        <span>🚫</span>
+        <span id="limitMsg"></span>
+      </div>
+
+      <div class="banner success" id="successBanner">
+        <span>✅</span>
+        <span id="successMsg"></span>
+      </div>
+
+      <div class="form-group">
+        <label for="phoneInput">Phone Number</label>
+        <input type="tel" id="phoneInput" placeholder="e.g. 0244123456" maxlength="10" />
+      </div>
+
+      <button class="track-btn" id="trackBtn" onclick="lookupOrders()">
+        View My Orders
+      </button>
+
+      <!-- Weekly quota bar (shown after lookup) -->
+      <div class="quota-wrap" id="quotaWrap">
+        <div class="quota-label">
+          <span>Orders this week</span>
+          <span id="quotaText">0 / 5</span>
+        </div>
+        <div class="quota-bar-bg">
+          <div class="quota-bar-fill" id="quotaFill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results rendered outside the search card -->
+    <div class="results-area" id="resultsArea"></div>
+
+    <div class="back-link">
+      <a href="/">← Back to order page</a>
+    </div>
+  </div>
+
+  <script>
+    const phoneInput  = document.getElementById('phoneInput');
+    const trackBtn    = document.getElementById('trackBtn');
+    const resultsArea = document.getElementById('resultsArea');
+
+    // Focus input on load; pre-fill from URL if ?phone= provided
+    window.onload = () => {
+      const params = new URLSearchParams(window.location.search);
+      const prePhone = params.get('phone');
+      if (prePhone) {
+        phoneInput.value = prePhone;
+        lookupOrders();
+      } else {
+        phoneInput.focus();
+      }
+    };
+
+    phoneInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') lookupOrders();
+    });
+
+    // ── Banner helpers ────────────────────────────────────────────────────────
+    function showBanner(id, msgId, msg) {
+      hideBanners();
+      document.getElementById(msgId).textContent = msg;
+      document.getElementById(id).classList.add('show');
+    }
+    function hideBanners() {
+      ['errorBanner','limitBanner','successBanner'].forEach(id => {
+        document.getElementById(id).classList.remove('show');
+      });
+    }
+    function showError(msg)   { showBanner('errorBanner',   'errorMsg',   msg); }
+    function showLimit(msg)   { showBanner('limitBanner',   'limitMsg',   msg); }
+    function showSuccess(msg) { showBanner('successBanner', 'successMsg', msg); }
+
+    // ── Weekly quota display ──────────────────────────────────────────────────
+    function updateQuota(count, limit) {
+      const wrap  = document.getElementById('quotaWrap');
+      const text  = document.getElementById('quotaText');
+      const fill  = document.getElementById('quotaFill');
+      text.textContent = `${count} / ${limit}`;
+      const pct = Math.min(100, Math.round(count / limit * 100));
+      fill.style.width = pct + '%';
+      fill.classList.toggle('full', count >= limit);
+      wrap.classList.add('show');
+    }
+
+    // ── Main lookup ───────────────────────────────────────────────────────────
+    async function lookupOrders() {
+      const phone = phoneInput.value.trim();
+      if (!phone) { showError('Please enter your phone number'); return; }
+      if (phone.length < 10) { showError('Phone number must be 10 digits'); return; }
+
+      hideBanners();
+      resultsArea.classList.remove('show');
+      resultsArea.innerHTML = '';
+      trackBtn.disabled = true;
+      trackBtn.innerHTML = '<span class="spinner"></span> Loading…';
+
+      try {
+        const res  = await fetch(`/api/orders-by-phone/${encodeURIComponent(phone)}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'No orders found for this number');
+          trackBtn.disabled = false;
+          trackBtn.innerHTML = 'View My Orders';
+          return;
+        }
+
+        updateQuota(data.current_week_count, data.weekly_limit);
+
+        if (data.current_week_count >= data.weekly_limit) {
+          showLimit(
+            `You've reached the weekly limit of ${data.weekly_limit} orders. ` +
+            `New orders open again next week.`
+          );
+        }
+
+        renderResults(data.weeks, phone);
+      } catch (e) {
+        showError('Network error. Please try again.');
+      } finally {
+        trackBtn.disabled = false;
+        trackBtn.innerHTML = 'View My Orders';
+      }
+    }
+
+    // ── Render weeks ──────────────────────────────────────────────────────────
+    function renderResults(weeks, phone) {
+      if (!weeks || weeks.length === 0) {
+        resultsArea.innerHTML = `
+          <div class="order-card">
+            <div class="empty-state">
+              <div class="emoji">🍛</div>
+              No orders found for this number yet.
+            </div>
+          </div>`;
+        resultsArea.classList.add('show');
+        return;
+      }
+
+      const html = weeks.map(week => {
+        const weekLabel = formatWeekLabel(week.year, week.week);
+        const ordersHtml = week.orders.map(o => renderOrderCard(o, phone)).join('');
+        const count = week.orders.length;
+        return `
+          <div class="week-group">
+            <div class="week-header">
+              <span class="week-label">${weekLabel}</span>
+              <div class="week-divider"></div>
+              <span class="week-badge">${count} order${count !== 1 ? 's' : ''}</span>
+            </div>
+            ${ordersHtml}
+          </div>`;
+      }).join('');
+
+      resultsArea.innerHTML = html;
+      resultsArea.classList.add('show');
+    }
+
+    // ── Single order card ─────────────────────────────────────────────────────
+    function renderOrderCard(o, phone) {
+      const items = o.items.split('\x1f').map(i => i.trim());
+      const itemsHtml = items.map(item =>
+        `<div class="receipt-row"><span>Item</span><span>${item}</span></div>`
+      ).join('');
+
+      const fmtDate = new Date(o.delivery_date).toLocaleDateString('en-GB', {
+        weekday: 'short', day: 'numeric', month: 'short'
+      });
+      const fmtTs = new Date(o.timestamp).toLocaleString('en-GB', {
+        day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+
+      const statusClass = `status-${o.status}`;
+      const statusLabel = {
+        pending:         '⏳ Pending',
+        confirmed:       '✅ Confirmed',
+        admin_delivered: '🚚 Out for Delivery',
+        cancelled:       '❌ Cancelled',
+        rejected:        '❌ Rejected',
+      }[o.status] || o.status;
+
+      let actionHtml = '';
+      if (o.status === 'confirmed') {
+        actionHtml = `
+          <button class="deliver-btn" id="dbtn-${o.order_id}"
+            onclick="confirmDelivered('${o.order_id}', '${phone}')">
+            ✓ Confirm I Received This Order
+          </button>`;
+      } else if (o.status === 'admin_delivered') {
+        actionHtml = `
+          <button class="deliver-btn waiting" id="dbtn-${o.order_id}"
+            onclick="confirmDelivered('${o.order_id}', '${phone}')">
+            🚚 Mark as Received
+          </button>`;
+      } else if (o.status === 'pending') {
+        actionHtml = `
+          <button class="cancel-btn" id="cbtn-${o.order_id}"
+            onclick="cancelOrder('${o.order_id}', '${phone}')">
+            ❌ Cancel This Order
+          </button>
+          <div class="pending-note">
+            ⏳ Waiting for admin confirmation on Telegram.
+          </div>`;
+      } else if (o.status === 'cancelled' || o.status === 'rejected') {
+        actionHtml = `
+          <div class="pending-note" style="background:rgba(192,57,43,0.1);color:rgba(255,255,255,0.5);">
+            ${o.status === 'cancelled' ? '❌ You cancelled this order' : '❌ This order was rejected by admin'}
+          </div>`;
+      }
+
+      return `
+        <div class="order-card" id="order-${o.order_id}">
+          <div class="order-card-top">
+            <div class="order-id-wrap">
+              <span class="order-id-num">#${o.order_id}</span>
+              <span class="order-ts">${fmtTs}</span>
+            </div>
+            <span class="status-badge ${statusClass}">${statusLabel}</span>
+          </div>
+
+          <div class="receipt-row"><span>Location</span><span>${o.hostel}</span></div>
+          ${o.room_notes ? `<div class="receipt-row"><span>Note</span><span style="max-width:180px;text-align:right">${o.room_notes}</span></div>` : ''}
+          <div class="receipt-row"><span>Delivery</span><span>${fmtDate}</span></div>
+          <div class="items-divider"></div>
+          ${itemsHtml}
+          <div class="receipt-row"><span>Subtotal</span><span>₵${o.subtotal.toFixed(2)}</span></div>
+          <div class="receipt-row"><span>Delivery fee</span><span>₵10.00</span></div>
+          <div class="receipt-row total-row"><span>Total</span><span>₵${o.total.toFixed(2)}</span></div>
+          ${actionHtml}
+        </div>`;
+    }
+
+    // ── Confirm delivered ─────────────────────────────────────────────────────
+    async function confirmDelivered(orderId, phone) {
+      const btn = document.getElementById(`dbtn-${orderId}`);
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Confirming…'; }
+
+      try {
+        const res  = await fetch(`/api/confirm-delivered/${orderId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Could not confirm delivery');
+          if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirm I Received This Order'; }
+          return;
+        }
+
+        // Update card UI
+        const card = document.getElementById(`order-${orderId}`);
+        if (card) {
+          const badge = card.querySelector('.status-badge');
+          if (badge) {
+            badge.className = 'status-badge status-admin_delivered';
+            badge.textContent = '🚚 Delivery Confirmed';
+          }
+          if (btn) {
+            btn.className = 'deliver-btn waiting';
+            btn.disabled = true;
+            btn.innerHTML = '✓ Received — waiting for admin to close order';
+          }
+        }
+        showSuccess('Your delivery has been confirmed! The order will be closed once the admin confirms on their end.');
+      } catch (e) {
+        showError('Network error. Please try again.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '✓ Confirm I Received This Order'; }
+      }
+    }
+
+    // ── Cancel order ─────────────────────────────────────────────────────────
+    async function cancelOrder(orderId, phone) {
+      const btn = document.getElementById(`cbtn-${orderId}`);
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Cancelling…'; }
+
+      try {
+        const res  = await fetch(`/api/cancel-order/${orderId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Could not cancel order');
+          if (btn) { btn.disabled = false; btn.innerHTML = '❌ Cancel This Order'; }
+          return;
+        }
+
+        // Remove the order card from the UI since it's deleted from DB
+        const card = document.getElementById(`order-${orderId}`);
+        if (card) {
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(-20px)';
+          setTimeout(() => card.remove(), 300);
+        }
+
+        showSuccess('Order cancelled and removed');
+      } catch (e) {
+        showError('Network error. Please try again.');
+        if (btn) { btn.disabled = false; btn.innerHTML = '❌ Cancel This Order'; }
+      }
+    }
+
+    // ── Week label helper ─────────────────────────────────────────────────────
+    function formatWeekLabel(year, week) {
+      // Get Monday of the ISO week
+      const jan4 = new Date(year, 0, 4);
+      const dayOfWeek = jan4.getDay() || 7;
+      const monday = new Date(jan4);
+      monday.setDate(jan4.getDate() - dayOfWeek + 1 + (week - 1) * 7);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+
+      const fmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+      const isCurrentWeek = (() => {
+        const now = new Date();
+        const isoWeek = getISOWeek(now);
+        return isoWeek.year === year && isoWeek.week === week;
+      })();
+
+      return isCurrentWeek
+        ? `This Week — ${fmt(monday)} – ${fmt(sunday)}`
+        : `${fmt(monday)} – ${fmt(sunday)}, ${year}`;
+    }
+
+    function getISOWeek(date) {
+      const d = new Date(date);
+      d.setHours(0,0,0,0);
+      d.setDate(d.getDate() + 3 - (d.getDay() + 6) % 7);
+      const week1 = new Date(d.getFullYear(), 0, 4);
+      return {
+        year: d.getFullYear(),
+        week: 1 + Math.round(((d - week1) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7)
+      };
+    }
+  </script>
+</body>
+</html>
