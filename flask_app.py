@@ -16,11 +16,8 @@ from dotenv import load_dotenv
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
-import asyncio
-import threading
-import queue  # not needed
 
-# ─── Background event loop ────────────────────────────────────
+# ─── Background event loop (runs forever in a daemon thread) ──────
 _loop = asyncio.new_event_loop()
 _thread = threading.Thread(target=_loop.run_forever, daemon=True)
 _thread.start()
@@ -29,21 +26,7 @@ def run_async(coro):
     """Submit a coroutine to the background event loop."""
     return asyncio.run_coroutine_threadsafe(coro, _loop)
 
-
-# ─── Start the background worker thread ──────────────────────
-_worker_thread = threading.Thread(target=telegram_worker, daemon=True)
-_worker_thread.start()
-print(Fore.GREEN + "[Waakye] Telegram worker thread started")
-
-# ─── Create a background event loop that runs forever ────────
-_loop = asyncio.new_event_loop()
-_thread = threading.Thread(target=_loop.run_forever, daemon=True)
-_thread.start()
-
-def run_async(coro):
-    """Submit a coroutine to the background event loop."""
-    return asyncio.run_coroutine_threadsafe(coro, _loop)
-
+# ─── Flask & config ───────────────────────────────────────────────
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -71,15 +54,12 @@ with open(_MENU_PATH, "r", encoding="utf-8") as _f:
     MENU = json.load(_f)
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "waakye_data.db")
-
 WEEKLY_ORDER_LIMIT = 5
 
-
 def get_db():
-    db = sqlite3.connect(DB_PATH, timeout=10.0)  # 10 second timeout
+    db = sqlite3.connect(DB_PATH, timeout=10.0)
     db.row_factory = sqlite3.Row
     return db
-
 
 def init_db():
     with get_db() as db:
@@ -114,7 +94,6 @@ def init_db():
                 PRIMARY KEY (message_id, chat_id)
             );
         """)
-        # Migrate existing DBs that don't have new columns yet
         existing = {row[1] for row in db.execute("PRAGMA table_info(orders)").fetchall()}
         migrations = {
             "status":                    "ALTER TABLE orders ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'",
@@ -127,14 +106,12 @@ def init_db():
             if col not in existing:
                 db.execute(sql)
 
-        # Migrate telegram_message_ids table if it exists with old schema
         tg_table_exists = db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='telegram_message_ids'"
         ).fetchone()
         if tg_table_exists:
             tg_columns = {row[1] for row in db.execute("PRAGMA table_info(telegram_message_ids)").fetchall()}
             if "chat_id" not in tg_columns:
-                # Drop old table and recreate with new schema
                 db.execute("DROP TABLE telegram_message_ids")
                 db.execute("""
                     CREATE TABLE telegram_message_ids (
@@ -145,24 +122,17 @@ def init_db():
                     )
                 """)
 
-
-# ─── OOP: Menu Item Hierarchy ──────────────────────────────────────────────────
-
+# ─── OOP: Menu, Package, Condiment, Customer, Order ─────────────
 class MenuItem(ABC):
     def __init__(self, name, price):
-        self._name  = name
+        self._name = name
         self._price = price
-
     @abstractmethod
     def get_price(self): pass
-
     @abstractmethod
     def get_description(self): pass
-
     def get_name(self): return self._name
-
     def __str__(self): return f"{self._name} (₵{self._price:.2f})"
-
 
 class Package(MenuItem):
     def __init__(self, pkg_type):
@@ -171,12 +141,9 @@ class Package(MenuItem):
             raise ValueError(f"Unknown package type: {pkg_type}")
         data = packages[pkg_type]
         super().__init__(data["name"], data["price"])
-        self._pkg_type = pkg_type
         self._includes = data["includes"]
-
     def get_price(self): return self._price
     def get_description(self): return self._includes
-
 
 class Condiment(MenuItem):
     def __init__(self, cond_key):
@@ -185,56 +152,42 @@ class Condiment(MenuItem):
             raise ValueError(f"Unknown condiment: {cond_key}")
         data = condiments[cond_key]
         super().__init__(data["name"], data["price"])
-
     def get_price(self): return self._price
     def get_description(self): return f"Add-on condiment: {self._name}"
 
-
 class Customer:
     def __init__(self, name, phone):
-        self._name  = name
+        self._name = name
         self._phone = phone
-
-    def get_name(self):  return self._name
+    def get_name(self): return self._name
     def get_phone(self): return self._phone
-
 
 class Order:
     def __init__(self, customer, items, hostel, room_notes, delivery_date):
-        self._order_id      = uuid.uuid4().hex[:6].upper()
-        self._customer      = customer
-        self._items         = items
-        self._hostel        = hostel
-        self._room_notes    = room_notes
+        self._order_id = uuid.uuid4().hex[:6].upper()
+        self._customer = customer
+        self._items = items
+        self._hostel = hostel
+        self._room_notes = room_notes
         self._delivery_date = delivery_date
-        self._timestamp     = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    def get_order_id(self):      return self._order_id
+        self._timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    def get_order_id(self): return self._order_id
     def get_delivery_date(self): return self._delivery_date
-    def get_hostel(self):        return self._hostel
-
+    def get_hostel(self): return self._hostel
     def subtotal(self):
         return sum(i.get_price() for i in self._items)
-
     def total(self):
         return self.subtotal() + MENU["delivery_fee"]
-
     def items_summary(self):
         return "\x1f".join(str(i) for i in self._items)
 
-
-# ─── Helpers ───────────────────────────────────────────────────────────────────
-
 def get_iso_week(dt=None):
-    """Return (iso_year, iso_week) for a date/datetime."""
     if dt is None:
         dt = datetime.date.today()
     iso = dt.isocalendar()
-    return iso[0], iso[1]   # (year, week)
-
+    return iso[0], iso[1]
 
 def count_orders_this_week(phone):
-    """Count how many orders a phone number has placed in the current ISO week."""
     year, week = get_iso_week()
     with get_db() as db:
         row = db.execute(
@@ -243,11 +196,14 @@ def count_orders_this_week(phone):
         ).fetchone()
     return row[0]
 
+def create_menu_item(item_type, item_key):
+    match item_type:
+        case "package":   return Package(item_key)
+        case "condiment": return Condiment(item_key)
+        case _:           raise ValueError(f"Unknown item type: {item_type}")
 
-# ─── Telegram Bot Handler ───────────────────────────────────────────────────────
-
+# ─── Telegram Async Handler ──────────────────────────────────────
 async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle incoming Telegram messages from admins."""
     try:
         print(Fore.CYAN + "[Waakye] Received webhook update")
         if not update.message or not update.message.text:
@@ -272,14 +228,12 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         order_id = parts[1]
 
         if command == "CONFIRM":
-            # ─── Database operations in a thread ─────────────────
             def get_order():
                 with get_db() as db:
                     return db.execute(
                         "SELECT status, admin_confirms FROM orders WHERE order_id=?",
                         (order_id,)
                     ).fetchone()
-
             def update_order(new_confirms):
                 with get_db() as db:
                     db.execute(
@@ -298,16 +252,13 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
             confirmed_ids.add(chat_id)
             new_confirms = ",".join(confirmed_ids)
-
             await asyncio.to_thread(update_order, new_confirms)
-
             await telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
 
         elif command == "REJECT":
             def get_order_status():
                 with get_db() as db:
                     return db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
-
             def delete_order():
                 with get_db() as db:
                     db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
@@ -330,14 +281,9 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
                         "SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?",
                         (order_id,)
                     ).fetchone()
-
             def update_status(status):
                 with get_db() as db:
-                    db.execute(
-                        "UPDATE orders SET status=? WHERE order_id=?",
-                        (status, order_id)
-                    )
-
+                    db.execute("UPDATE orders SET status=? WHERE order_id=?", (status, order_id))
             def delete_order():
                 with get_db() as db:
                     db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
@@ -346,7 +292,6 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
             if not row:
                 await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                 return
-
             if row["status"] != "confirmed":
                 await telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
                 return
@@ -365,43 +310,31 @@ async def handle_telegram_message(update: Update, context: ContextTypes.DEFAULT_
         import traceback
         traceback.print_exc()
 
-
-
-# ─── Telegram Webhook Setup ───────────────────────────────────────────────────
-
+# ─── Telegram Webhook Setup ──────────────────────────────────────
 telegram_application = None
 
 def setup_telegram_webhook():
-    """Set up Telegram webhook for production (Render)."""
     global telegram_application
     if not TELEGRAM_BOT_TOKEN:
         print(Fore.YELLOW + "[Waakye] No TELEGRAM_BOT_TOKEN set, skipping webhook setup")
         return
-
     try:
         telegram_application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-
-        # Add message handler
         message_handler = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_telegram_message)
         telegram_application.add_handler(message_handler)
 
-        # Get webhook URL from environment or use default
         webhook_url = os.getenv("WEBHOOK_URL")
         if webhook_url:
-            # Production: Set webhook
             full_url = f"{webhook_url}/telegram-webhook"
             print(Fore.GREEN + f"[Waakye] Setting Telegram webhook to: {full_url}")
             asyncio.run(telegram_application.bot.set_webhook(url=full_url))
             print(Fore.GREEN + "[Waakye] Telegram webhook configured successfully")
         else:
-            # Development: Use polling
             print(Fore.YELLOW + "[Waakye] No WEBHOOK_URL set, using polling (development mode)")
     except Exception as e:
         print(Fore.RED + f"[Waakye] Failed to setup Telegram: {e}")
 
-
-# ─── Telegram ──────────────────────────────────────────────────────────────────
-
+# ─── Async Telegram Senders ──────────────────────────────────────
 async def send_telegram_notification(order, customer, items, final_total):
     if not telegram_bot:
         return
@@ -428,11 +361,7 @@ async def send_telegram_notification(order, customer, items, final_total):
         for chat_id in TELEGRAM_CHAT_IDS:
             for attempt in range(3):
                 try:
-                    await telegram_bot.send_message(
-                        chat_id=chat_id,
-                        text=message.strip(),
-                        parse_mode="HTML"
-                    )
+                    await telegram_bot.send_message(chat_id=chat_id, text=message.strip(), parse_mode="HTML")
                     await asyncio.sleep(0.5)
                     break
                 except TelegramError as e:
@@ -443,38 +372,20 @@ async def send_telegram_notification(order, customer, items, final_total):
     except Exception as e:
         print(Fore.RED + f"[Waakye] Unexpected Telegram error: {e}")
 
-
 async def send_status_update(order_id, message_text):
-    """Send a status update message to all Telegram chat IDs."""
     if not telegram_bot:
         return
     try:
         for chat_id in TELEGRAM_CHAT_IDS:
-            await telegram_bot.send_message(
-                chat_id=chat_id,
-                text=message_text,
-                parse_mode="HTML"
-            )
+            await telegram_bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML")
             await asyncio.sleep(0.3)
     except Exception as e:
         print(Fore.RED + f"[Waakye] Status update Telegram error: {e}")
 
-
-# ─── Factory ───────────────────────────────────────────────────────────────────
-
-def create_menu_item(item_type, item_key):
-    match item_type:
-        case "package":   return Package(item_key)
-        case "condiment": return Condiment(item_key)
-        case _:           raise ValueError(f"Unknown item type: {item_type}")
-
-
-# ─── Routes ────────────────────────────────────────────────────────────────────
-
+# ─── Flask Routes ────────────────────────────────────────────────
 @app.route("/")
 def index():
     return render_template("waakye.html")
-
 
 @app.route("/api/menu")
 def get_menu():
@@ -487,11 +398,9 @@ def get_menu():
         "hostels":     MENU["hostels"],
     })
 
-
 @app.route("/api/order", methods=["POST"])
 def place_order():
     data = request.get_json()
-
     name          = data.get("name", "").strip()
     phone         = data.get("phone", "").strip()
     hostel        = data.get("hostel", "").strip()
@@ -526,16 +435,13 @@ def place_order():
         parsed_phone = phonenumbers.parse(phone, "GH")
     except NumberParseException:
         return jsonify({"error": "Invalid phone number format"}), 400
-
     if not is_valid_number(parsed_phone):
         return jsonify({"error": "Invalid Ghanaian phone number"}), 400
-
     operator = ph_carrier.name_for_number(parsed_phone, "en") or "Unknown"
 
     if hostel not in MENU["hostels"]:
         return jsonify({"error": "Invalid hostel"}), 400
 
-    # ── Weekly order limit check ─────────────────────────────────────────────
     weekly_count = count_orders_this_week(phone)
     if weekly_count >= WEEKLY_ORDER_LIMIT:
         return jsonify({
@@ -560,10 +466,7 @@ def place_order():
     year, week  = get_iso_week()
 
     with get_db() as db:
-        db.execute(
-            "INSERT OR IGNORE INTO customers (phone, name) VALUES (?, ?)",
-            (phone, name)
-        )
+        db.execute("INSERT OR IGNORE INTO customers (phone, name) VALUES (?, ?)", (phone, name))
         db.execute(
             """INSERT INTO orders
                (order_id, phone, hostel, room_notes, delivery_date,
@@ -623,12 +526,10 @@ def place_order():
         "weekly_limit":  WEEKLY_ORDER_LIMIT,
     })
 
-
 @app.route("/api/orders")
 def get_orders():
     if request.args.get("key") != os.environ.get("ADMIN_KEY", "changeme"):
         return jsonify({"error": "Unauthorized"}), 403
-
     with get_db() as db:
         rows = db.execute("""
             SELECT o.order_id, c.name, o.phone, o.hostel, o.room_notes,
@@ -638,7 +539,6 @@ def get_orders():
             JOIN customers c ON c.phone = o.phone
             ORDER BY o.timestamp DESC
         """).fetchall()
-
     return jsonify([
         {
             "order_id":      r["order_id"],
@@ -658,11 +558,9 @@ def get_orders():
         for r in rows
     ])
 
-
 @app.route("/track")
 def track_order():
     return render_template("track.html")
-
 
 @app.route("/api/track/<order_id>")
 def track_order_api(order_id):
@@ -676,10 +574,8 @@ def track_order_api(order_id):
             JOIN customers c ON c.phone = o.phone
             WHERE o.order_id = ?
         """, (order_id,)).fetchone()
-
     if not row:
         return jsonify({"error": "Order not found"}), 404
-
     return jsonify({
         "order_id":      row["order_id"],
         "name":          row["name"],
@@ -696,16 +592,9 @@ def track_order_api(order_id):
         "year":          row["year"],
     })
 
-
 @app.route("/api/orders-by-phone/<phone>")
 def orders_by_phone(phone):
-    """
-    Return all orders for a given phone number, grouped by ISO week.
-    This is what the tracking page uses after the user enters their phone.
-    """
     phone = phone.strip()
-
-    # Validate phone
     try:
         parsed = phonenumbers.parse(phone, "GH")
         if not is_valid_number(parsed):
@@ -727,7 +616,6 @@ def orders_by_phone(phone):
     if not rows:
         return jsonify({"error": "No orders found for this phone number"}), 404
 
-    # Group by (year, week_number)
     weeks = {}
     for r in rows:
         key = f"{r['year']}-W{r['week_number']:02d}"
@@ -747,7 +635,6 @@ def orders_by_phone(phone):
             "status":        r["status"],
         })
 
-    # Build weekly limit info for current week
     year, week = get_iso_week()
     current_week_key = f"{year}-W{week:02d}"
     current_week_count = len(weeks.get(current_week_key, {}).get("orders", []))
@@ -758,112 +645,67 @@ def orders_by_phone(phone):
         "weekly_limit": WEEKLY_ORDER_LIMIT,
     })
 
-
 @app.route("/api/admin-confirm", methods=["POST"])
 def admin_confirm():
-    """
-    Called when a Telegram admin replies CONFIRM <order_id>.
-    Requires ?key=<ADMIN_KEY> for security.
-    Body: { "order_id": "ABC123", "chat_id": "123456789" }
-    Single admin confirmation required.
-    """
     if request.args.get("key") != os.environ.get("ADMIN_KEY", "changeme"):
         return jsonify({"error": "Unauthorized"}), 403
-
-    data     = request.get_json()
+    data = request.get_json()
     order_id = data.get("order_id", "").strip().upper()
-    chat_id  = str(data.get("chat_id", "")).strip()
-
+    chat_id = str(data.get("chat_id", "")).strip()
     if not order_id or not chat_id:
         return jsonify({"error": "order_id and chat_id are required"}), 400
-
     if chat_id not in TELEGRAM_CHAT_IDS:
         return jsonify({"error": "Unrecognised chat_id"}), 403
 
     with get_db() as db:
-        row = db.execute(
-            "SELECT status, admin_confirms FROM orders WHERE order_id=?",
-            (order_id,)
-        ).fetchone()
-
+        row = db.execute("SELECT status, admin_confirms FROM orders WHERE order_id=?", (order_id,)).fetchone()
         if not row:
             return jsonify({"error": "Order not found"}), 404
         if row["status"] not in ("pending",):
             return jsonify({"message": f"Order is already {row['status']}"}), 200
 
-        # Track which chat IDs have confirmed
         confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
         confirmed_ids.add(chat_id)
         new_confirms = ",".join(confirmed_ids)
-
-        # Single admin confirmation - change status immediately
         db.execute(
             "UPDATE orders SET admin_confirms=?, status='confirmed' WHERE order_id=?",
             (new_confirms, order_id)
         )
 
-    msg = (
-        f"✅ <b>Order #{order_id} CONFIRMED</b>\n"
-        f"Admin confirmed. Customer has been notified."
-    )
+    msg = f"✅ <b>Order #{order_id} CONFIRMED</b>\nAdmin confirmed. Customer has been notified."
     try:
         asyncio.run(send_status_update(order_id, msg))
     except Exception:
         pass
     return jsonify({"message": "Order confirmed", "status": "confirmed"})
 
-
 @app.route("/api/cancel-order/<order_id>", methods=["POST"])
 def cancel_order(order_id):
-    """
-    Called when the customer cancels an order on the tracking page.
-    Only allowed when status is 'pending'.
-    Deletes the order from the database.
-    """
     order_id = order_id.strip().upper()
-
-    data  = request.get_json() or {}
+    data = request.get_json() or {}
     phone = data.get("phone", "").strip()
 
     with get_db() as db:
-        row = db.execute(
-            "SELECT status, phone FROM orders WHERE order_id=?",
-            (order_id,)
-        ).fetchone()
-
+        row = db.execute("SELECT status, phone FROM orders WHERE order_id=?", (order_id,)).fetchone()
         if not row:
             return jsonify({"error": "Order not found"}), 404
         if row["phone"] != phone:
             return jsonify({"error": "Phone number does not match this order"}), 403
         if row["status"] != "pending":
             return jsonify({"error": f"Cannot cancel order with status '{row['status']}'. Only pending orders can be cancelled."}), 400
-
         db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
 
-    # Notify admins about cancellation
     msg = f"❌ <b>Order #{order_id} CANCELLED</b>\nCustomer cancelled the order. Order removed from database."
     try:
         asyncio.run(send_status_update(order_id, msg))
     except Exception:
         pass
-
-    return jsonify({
-        "message": "Order cancelled and removed",
-        "status": "deleted"
-    })
-
+    return jsonify({"message": "Order cancelled and removed", "status": "deleted"})
 
 @app.route("/api/confirm-delivered/<order_id>", methods=["POST"])
 def confirm_delivered(order_id):
-    """
-    Called when the customer presses 'Confirm Delivered' on the tracking page.
-    Admin must have already replied DELIVERED <order_id> on Telegram.
-    If both have confirmed, order is deleted from the database.
-    """
     order_id = order_id.strip().upper()
-
-    # Require the phone to match (simple ownership check)
-    data  = request.get_json() or {}
+    data = request.get_json() or {}
     phone = data.get("phone", "").strip()
 
     with get_db() as db:
@@ -871,7 +713,6 @@ def confirm_delivered(order_id):
             "SELECT status, admin_confirms, user_confirmed_delivered, phone FROM orders WHERE order_id=?",
             (order_id,)
         ).fetchone()
-
         if not row:
             return jsonify({"error": "Order not found"}), 404
         if row["phone"] != phone:
@@ -879,57 +720,31 @@ def confirm_delivered(order_id):
         if row["status"] != "confirmed":
             return jsonify({"error": f"Order is currently '{row['status']}', not ready for delivery confirmation"}), 400
 
-        db.execute(
-            "UPDATE orders SET user_confirmed_delivered=1 WHERE order_id=?",
-            (order_id,)
-        )
-
-        # Check if admin has also flagged it as delivered
-        # We reuse admin_confirms — when admin sends DELIVERED, we set status to 'admin_delivered'
-        admin_delivered = row["status"] == "confirmed"  # admin side checked below
-        # Re-fetch to see if admin_delivered flag is set
-        row2 = db.execute(
-            "SELECT status FROM orders WHERE order_id=?", (order_id,)
-        ).fetchone()
+        db.execute("UPDATE orders SET user_confirmed_delivered=1 WHERE order_id=?", (order_id,))
 
     return jsonify({
-        "message": "Your delivery confirmation has been recorded. "
-                   "The order will be removed once the admin also confirms delivery.",
+        "message": "Your delivery confirmation has been recorded. The order will be removed once the admin also confirms delivery.",
         "status": "awaiting_admin_delivery"
     })
 
-
 @app.route("/api/admin-reject", methods=["POST"])
 def admin_reject():
-    """
-    Called when a Telegram admin replies REJECT <order_id>.
-    Requires ?key=<ADMIN_KEY>.
-    Deletes the order from the database.
-    """
     if request.args.get("key") != os.environ.get("ADMIN_KEY", "changeme"):
         return jsonify({"error": "Unauthorized"}), 403
-
-    data     = request.get_json()
+    data = request.get_json()
     order_id = data.get("order_id", "").strip().upper()
-    chat_id  = str(data.get("chat_id", "")).strip()
-
+    chat_id = str(data.get("chat_id", "")).strip()
     if not order_id:
         return jsonify({"error": "order_id required"}), 400
-
     if chat_id not in TELEGRAM_CHAT_IDS:
         return jsonify({"error": "Unrecognised chat_id"}), 403
 
     with get_db() as db:
-        row = db.execute(
-            "SELECT status FROM orders WHERE order_id=?",
-            (order_id,)
-        ).fetchone()
-
+        row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
         if not row:
             return jsonify({"error": "Order not found"}), 404
         if row["status"] not in ("pending",):
             return jsonify({"message": f"Order is already {row['status']}"}), 200
-
         db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
 
     msg = f"❌ <b>Order #{order_id} REJECTED</b>\nAdmin rejected this order. Order removed from database."
@@ -937,24 +752,15 @@ def admin_reject():
         asyncio.run(send_status_update(order_id, msg))
     except Exception:
         pass
-
     return jsonify({"message": "Order rejected and removed", "status": "deleted"})
-
 
 @app.route("/api/admin-delivered", methods=["POST"])
 def admin_delivered():
-    """
-    Called when a Telegram admin replies DELIVERED <order_id>.
-    Requires ?key=<ADMIN_KEY>.
-    If user has also confirmed, the order is deleted.
-    """
     if request.args.get("key") != os.environ.get("ADMIN_KEY", "changeme"):
         return jsonify({"error": "Unauthorized"}), 403
-
-    data     = request.get_json()
+    data = request.get_json()
     order_id = data.get("order_id", "").strip().upper()
-    chat_id  = str(data.get("chat_id", "")).strip()
-
+    chat_id = str(data.get("chat_id", "")).strip()
     if not order_id:
         return jsonify({"error": "order_id required"}), 400
 
@@ -963,15 +769,12 @@ def admin_delivered():
             "SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?",
             (order_id,)
         ).fetchone()
-
         if not row:
             return jsonify({"error": "Order not found"}), 404
-
         if row["status"] != "confirmed":
             return jsonify({"error": f"Order is currently '{row['status']}', not ready for delivery confirmation"}), 400
 
         if row["user_confirmed_delivered"] == 1:
-            # Both sides confirmed — delete the order
             db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
             msg = f"🎉 <b>Order #{order_id} DELIVERED & CLOSED</b>\nBoth parties confirmed. Order removed."
             try:
@@ -980,22 +783,17 @@ def admin_delivered():
                 pass
             return jsonify({"message": "Order delivered and removed", "status": "deleted"})
         else:
-            # Mark admin side as delivered, wait for user
-            db.execute(
-                "UPDATE orders SET status='admin_delivered' WHERE order_id=?",
-                (order_id,)
-            )
+            db.execute("UPDATE orders SET status='admin_delivered' WHERE order_id=?", (order_id,))
             return jsonify({
                 "message": "Delivery recorded. Waiting for customer to confirm on the tracking page.",
                 "status": "admin_delivered"
             })
 
-
 @app.route("/telegram-webhook", methods=["POST"])
 def telegram_webhook():
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Fire and forget – no waiting
+        # Fire and forget – no waiting, so no timeout
         run_async(handle_telegram_message(update, None))
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
@@ -1003,10 +801,8 @@ def telegram_webhook():
         traceback.print_exc()
     return "OK", 200
 
-
 @app.route("/api/weekly-limit/<phone>")
 def check_weekly_limit(phone):
-    """Quick check — how many orders has this phone placed this week?"""
     phone = phone.strip()
     try:
         parsed = phonenumbers.parse(phone, "GH")
@@ -1017,21 +813,18 @@ def check_weekly_limit(phone):
 
     count = count_orders_this_week(phone)
     return jsonify({
-        "count":   count,
-        "limit":   WEEKLY_ORDER_LIMIT,
+        "count": count,
+        "limit": WEEKLY_ORDER_LIMIT,
         "remaining": max(0, WEEKLY_ORDER_LIMIT - count),
         "at_limit": count >= WEEKLY_ORDER_LIMIT,
     })
 
-
+# ─── Main ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     init_db()
     print(Fore.YELLOW + "[Waakye] Order System running at http://127.0.0.1:5000")
-
-    # Setup Telegram (webhook for production, polling for development)
     setup_telegram_webhook()
 
-    # If no webhook URL, run polling in background thread for development
     if not os.getenv("WEBHOOK_URL") and telegram_application:
         def run_polling():
             print(Fore.GREEN + "[Waakye] Starting Telegram polling (development mode)...")
