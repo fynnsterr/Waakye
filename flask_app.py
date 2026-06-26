@@ -445,7 +445,12 @@ def place_order():
     if telegram_bot:
         try:
             import asyncio
-            asyncio.run(send_telegram_notification(order, Customer(name, phone), items, final_total))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(send_telegram_notification(order, Customer(name, phone), items, final_total))
+            finally:
+                loop.close()
         except Exception as e:
             import traceback
             print(Fore.RED + f"[Waakye] Telegram error: {e}\n{traceback.format_exc()}")
@@ -636,7 +641,12 @@ def admin_confirm():
     msg = f"✅ <b>Order #{order_id} CONFIRMED</b>\nAdmin confirmed. Customer has been notified."
     try:
         import asyncio
-        asyncio.run(send_status_update(order_id, msg))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(send_status_update(order_id, msg))
+        finally:
+            loop.close()
     except Exception:
         pass
     return jsonify({"message": "Order confirmed", "status": "confirmed"})
@@ -660,7 +670,12 @@ def cancel_order(order_id):
     msg = f"❌ <b>Order #{order_id} CANCELLED</b>\nCustomer cancelled the order. Order removed from database."
     try:
         import asyncio
-        asyncio.run(send_status_update(order_id, msg))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(send_status_update(order_id, msg))
+        finally:
+            loop.close()
     except Exception:
         pass
     return jsonify({"message": "Order cancelled and removed", "status": "deleted"})
@@ -713,7 +728,12 @@ def admin_reject():
     msg = f"❌ <b>Order #{order_id} REJECTED</b>\nAdmin rejected this order. Order removed from database."
     try:
         import asyncio
-        asyncio.run(send_status_update(order_id, msg))
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(send_status_update(order_id, msg))
+        finally:
+            loop.close()
     except Exception:
         pass
     return jsonify({"message": "Order rejected and removed", "status": "deleted"})
@@ -743,7 +763,12 @@ def admin_delivered():
             msg = f"🎉 <b>Order #{order_id} DELIVERED & CLOSED</b>\nBoth parties confirmed. Order removed."
             try:
                 import asyncio
-                asyncio.run(send_status_update(order_id, msg))
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(send_status_update(order_id, msg))
+                finally:
+                    loop.close()
             except Exception:
                 pass
             return jsonify({"message": "Order delivered and removed", "status": "deleted"})
@@ -760,7 +785,12 @@ def telegram_webhook():
         raw = request.json
         update = Update.de_json(raw, telegram_bot)
         if update and update.message and update.message.text:
-            asyncio.run(process_update_async(update))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(process_update_async(update))
+            finally:
+                loop.close()
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
