@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.error import TelegramError
+import asyncio
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -285,7 +286,7 @@ def process_update_sync(update):
         traceback.print_exc()
 
 
-        
+
 def telegram_worker():
     """Background thread worker – processes updates from the queue."""
     print(Fore.GREEN + "[Waakye] Telegram worker thread started")
