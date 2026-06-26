@@ -1766,6 +1766,9 @@
           return;
         }
 
+        // Reset button before showing modal so it's ready when modal closes
+        btn.disabled = true;
+        btn.innerHTML = 'Place Order →';
         showModal(result, body);
       } catch (e) {
         // #11 — inline error banner instead of alert()
@@ -1847,11 +1850,13 @@
       });
 
       renderCart();
-      onFormChange();
 
+      // Reset button explicitly before onFormChange (which will keep it disabled since form is empty)
       const btn = document.getElementById('orderBtn');
-      btn.disabled  = true;
       btn.innerHTML = 'Place Order →';
+      btn.disabled = true;
+
+      onFormChange();
     }
 
     // ─── Copy Order ID ───────────────────────────────────────────
