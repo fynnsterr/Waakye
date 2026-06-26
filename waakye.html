@@ -774,10 +774,10 @@
       vertical-align: middle;
       letter-spacing: 0.3px;
     }
-    .op-mtn      { background: #FFC300; color: #000; }
-    .op-telecel  { background: #E30613; color: #fff; }
-    .op-airteltigo { background: #fff; color: #000; border: 1px solid #ddd; }
-    .op-unknown  { background: #555;    color: #fff; }
+    .op-mtn        { background: #FFC300; color: #000; }
+    .op-telecel    { background: #E30613; color: #fff; }
+    .op-airteltigo { background: #fff; color: #000; border: 1.5px solid #ccc; }
+    .op-unknown    { background: #555;    color: #fff; }
 
     /* ─── Improved Mobile (≤480px) ──────────────────────────────── */
     @media (max-width: 480px) {
@@ -1781,13 +1781,14 @@
     // ─── Confirmation modal ───────────────────────────────────
     function operatorBadge(op) {
       if (!op || op === 'Unknown') return '';
-      const name = op.toLowerCase();
+      console.log('[Waakye] Operator string:', op);
+      const name = op.toLowerCase().replace(/\s/g, '');
       if (name.includes('mtn')) {
         return `<span class="operator-badge op-mtn">MTN</span>`;
       } else if (name.includes('telecel') || name.includes('vodafone')) {
         return `<span class="operator-badge op-telecel">Telecel</span>`;
       } else if (name.includes('airtel') || name.includes('tigo')) {
-        return `<span class="operator-badge op-airteltigo"><span style="color:#0057A8;font-weight:800;">A</span><span style="color:#E30613;font-weight:800;">T</span></span>`;
+        return `<span class="operator-badge op-airteltigo"><span style="color:#003DA5;font-weight:800;">A</span><span style="color:#ED1C24;font-weight:800;">T</span></span>`;
       }
       return `<span class="operator-badge op-unknown">${op}</span>`;
     }
@@ -1829,10 +1830,13 @@
     function closeModal() {
       document.getElementById('modal').classList.remove('show');
       hideError();
-      // Reset everything
+
+      // Reset state
       cart = [];
       selectedPkg = null;
       phoneValid  = false;
+
+      // Reset form fields
       ['custName','custPhone','delivDate','notes'].forEach(id => {
         document.getElementById(id).value = '';
       });
@@ -1840,18 +1844,12 @@
       document.getElementById('phoneError').textContent = '';
       document.getElementById('custPhone').classList.remove('input-invalid');
 
-      document.querySelectorAll('.pkg-card').forEach(c => c.classList.remove('selected'));
-      document.querySelectorAll('.cond-item').forEach(c => {
-        c.classList.remove('has-qty');
-        const qtyValue = c.querySelector('.qty-value');
-        const minusBtn = c.querySelector('.qty-btn:first-child');
-        if (qtyValue) qtyValue.textContent = '0';
-        if (minusBtn) minusBtn.disabled = true;
-      });
-
+      // Fully re-render menu to guarantee clean visual state
+      renderPackages();
+      renderCondiments();
       renderCart();
 
-      // Reset button explicitly before onFormChange (which will keep it disabled since form is empty)
+      // Reset button
       const btn = document.getElementById('orderBtn');
       btn.innerHTML = 'Place Order →';
       btn.disabled = true;
