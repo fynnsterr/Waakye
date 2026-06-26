@@ -28,7 +28,7 @@ load_dotenv()
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_IDS = os.getenv("TELEGRAM_CHAT_IDS", "").split(",") if os.getenv("TELEGRAM_CHAT_IDS") else []
 ADMIN_KEY = os.getenv("ADMIN_KEY", "changeme")
-telegram_bot = None
+telegram_bot = None          # Only used for deserialization and legacy checks
 telegram_app = None
 
 if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_IDS:
@@ -192,81 +192,117 @@ def create_menu_item(item_type, item_key):
         case "condiment": return Condiment(item_key)
         case _:           raise ValueError(f"Unknown item type: {item_type}")
 
-
-
-async def process_update_async(update):
+# ─── NEW: Async handlers with fresh bot instances ──────────────
+async def process_update_async(update, bot):
     try:
         chat_id = str(update.effective_chat.id)
         print(Fore.CYAN + f"[Waakye] Processing command from chat_id: {chat_id}")
-
         if chat_id not in TELEGRAM_CHAT_IDS:
-            await telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
+            await bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
             return
-
         text = update.message.text.strip().upper()
         parts = text.split()
         print(Fore.CYAN + f"[Waakye] Command parts: {parts}")
-
         if len(parts) < 2:
-            await telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
+            await bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
             return
-
         command, order_id = parts[0], parts[1]
-
         if command == "CONFIRM":
             with get_db() as db:
                 row = db.execute("SELECT status, admin_confirms FROM orders WHERE order_id=?", (order_id,)).fetchone()
                 if not row:
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    await bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                     return
                 if row["status"] != "pending":
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                    await bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
                     return
                 confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
                 confirmed_ids.add(chat_id)
                 db.execute("UPDATE orders SET admin_confirms=?, status='confirmed' WHERE order_id=?",
                            (",".join(confirmed_ids), order_id))
-            await telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
-
+            await bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
         elif command == "REJECT":
             with get_db() as db:
                 row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
                 if not row:
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    await bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                     return
                 if row["status"] != "pending":
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                    await bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
                     return
                 db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-            await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
-
+            await bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
         elif command == "DELIVERED":
             with get_db() as db:
                 row = db.execute("SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?", (order_id,)).fetchone()
                 if not row:
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    await bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
                     return
                 if row["status"] != "confirmed":
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"Order is '{row['status']}', not ready for delivery confirmation")
+                    await bot.send_message(chat_id=chat_id, text=f"Order is '{row['status']}', not ready for delivery confirmation")
                     return
                 if row["user_confirmed_delivered"] == 1:
                     db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-                    await telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED. Both parties confirmed.")
+                    await bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED. Both parties confirmed.")
                 else:
                     db.execute("UPDATE orders SET status='admin_delivered' WHERE order_id=?", (order_id,))
-                    await telegram_bot.send_message(chat_id=chat_id, text="Delivery recorded. Waiting for customer to confirm.")
+                    await bot.send_message(chat_id=chat_id, text="Delivery recorded. Waiting for customer to confirm.")
         else:
-            await telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
-
+            await bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
     except Exception as e:
         print(Fore.RED + f"[Waakye] Process update error: {e}")
         import traceback
         traceback.print_exc()
 
+# ─── Outgoing notification senders (fresh bot per call) ──────────
+async def send_telegram_notification(order, customer, items, final_total):
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    async with Bot(token=TELEGRAM_BOT_TOKEN) as bot:
+        try:
+            message = (
+                f"🍛 <b>NEW WAAKYE ORDER</b> 🍛\n\n"
+                f"<b>Order ID:</b> #{order.get_order_id()}\n"
+                f"<b>Customer:</b> {customer.get_name()}\n"
+                f"<b>Phone:</b> {customer.get_phone()}\n"
+                f"<b>Hostel:</b> {order.get_hostel()}\n"
+                f"<b>Delivery Date:</b> {order.get_delivery_date()}\n\n"
+                f"<b>Items:</b>\n"
+            )
+            for item in items:
+                message += f"  • {item}\n"
+            message += (
+                f"\n<b>Delivery Fee:</b> ₵{MENU['delivery_fee']:.2f}\n"
+                f"<b>TOTAL:</b> ₵{final_total:.2f}\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━\n"
+                f"✅ Reply <b>CONFIRM {order.get_order_id()}</b> to confirm this order\n"
+                f"❌ Reply <b>REJECT {order.get_order_id()}</b> to reject this order\n"
+                f"🚚 Reply <b>DELIVERED {order.get_order_id()}</b> to mark as delivered"
+            )
+            for chat_id in TELEGRAM_CHAT_IDS:
+                for attempt in range(3):
+                    try:
+                        await bot.send_message(chat_id=chat_id, text=message.strip(), parse_mode="HTML")
+                        await asyncio.sleep(0.5)
+                        break
+                    except TelegramError as e:
+                        if attempt < 2:
+                            await asyncio.sleep(1)
+                        else:
+                            print(Fore.RED + f"[Waakye] Telegram send failed: {e}")
+        except Exception as e:
+            print(Fore.RED + f"[Waakye] Unexpected Telegram error: {e}")
 
-
-
-
+async def send_status_update(order_id, message_text):
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    async with Bot(token=TELEGRAM_BOT_TOKEN) as bot:
+        try:
+            for chat_id in TELEGRAM_CHAT_IDS:
+                await bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML")
+                await asyncio.sleep(0.3)
+        except Exception as e:
+            print(Fore.RED + f"[Waakye] Status update Telegram error: {e}")
 
 # ─── Telegram Webhook Setup ──────────────────────────────────────
 telegram_application = None
@@ -285,7 +321,6 @@ def setup_telegram_webhook():
         if webhook_url:
             full_url = f"{webhook_url}/telegram-webhook"
             print(Fore.GREEN + f"[Waakye] Setting Telegram webhook to: {full_url}")
-            # Use asyncio.run() just for this one-time setup
             import asyncio
             asyncio.run(telegram_application.bot.set_webhook(url=full_url))
             print(Fore.GREEN + "[Waakye] Telegram webhook configured successfully")
@@ -293,54 +328,6 @@ def setup_telegram_webhook():
             print(Fore.YELLOW + "[Waakye] No WEBHOOK_URL set, using polling (development mode)")
     except Exception as e:
         print(Fore.RED + f"[Waakye] Failed to setup Telegram: {e}")
-
-# ─── Async Telegram Senders (for outgoing notifications) ──────────
-async def send_telegram_notification(order, customer, items, final_total):
-    if not telegram_bot:
-        return
-    try:
-        message = (
-            f"🍛 <b>NEW WAAKYE ORDER</b> 🍛\n\n"
-            f"<b>Order ID:</b> #{order.get_order_id()}\n"
-            f"<b>Customer:</b> {customer.get_name()}\n"
-            f"<b>Phone:</b> {customer.get_phone()}\n"
-            f"<b>Hostel:</b> {order.get_hostel()}\n"
-            f"<b>Delivery Date:</b> {order.get_delivery_date()}\n\n"
-            f"<b>Items:</b>\n"
-        )
-        for item in items:
-            message += f"  • {item}\n"
-        message += (
-            f"\n<b>Delivery Fee:</b> ₵{MENU['delivery_fee']:.2f}\n"
-            f"<b>TOTAL:</b> ₵{final_total:.2f}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━\n"
-            f"✅ Reply <b>CONFIRM {order.get_order_id()}</b> to confirm this order\n"
-            f"❌ Reply <b>REJECT {order.get_order_id()}</b> to reject this order\n"
-            f"🚚 Reply <b>DELIVERED {order.get_order_id()}</b> to mark as delivered"
-        )
-        for chat_id in TELEGRAM_CHAT_IDS:
-            for attempt in range(3):
-                try:
-                    await telegram_bot.send_message(chat_id=chat_id, text=message.strip(), parse_mode="HTML")
-                    await asyncio.sleep(0.5)
-                    break
-                except TelegramError as e:
-                    if attempt < 2:
-                        await asyncio.sleep(1)
-                    else:
-                        print(Fore.RED + f"[Waakye] Telegram send failed: {e}")
-    except Exception as e:
-        print(Fore.RED + f"[Waakye] Unexpected Telegram error: {e}")
-
-async def send_status_update(order_id, message_text):
-    if not telegram_bot:
-        return
-    try:
-        for chat_id in TELEGRAM_CHAT_IDS:
-            await telegram_bot.send_message(chat_id=chat_id, text=message_text, parse_mode="HTML")
-            await asyncio.sleep(0.3)
-    except Exception as e:
-        print(Fore.RED + f"[Waakye] Status update Telegram error: {e}")
 
 # ─── Flask Routes ────────────────────────────────────────────────
 @app.route("/")
@@ -442,7 +429,7 @@ def place_order():
             )
         )
 
-    if telegram_bot:
+    if TELEGRAM_BOT_TOKEN:
         try:
             import asyncio
             loop = asyncio.new_event_loop()
@@ -639,16 +626,17 @@ def admin_confirm():
         )
 
     msg = f"✅ <b>Order #{order_id} CONFIRMED</b>\nAdmin confirmed. Customer has been notified."
-    try:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    if TELEGRAM_BOT_TOKEN:
         try:
-            loop.run_until_complete(send_status_update(order_id, msg))
-        finally:
-            loop.close()
-    except Exception:
-        pass
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(send_status_update(order_id, msg))
+            finally:
+                loop.close()
+        except Exception:
+            pass
     return jsonify({"message": "Order confirmed", "status": "confirmed"})
 
 @app.route("/api/cancel-order/<order_id>", methods=["POST"])
@@ -668,16 +656,17 @@ def cancel_order(order_id):
         db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
 
     msg = f"❌ <b>Order #{order_id} CANCELLED</b>\nCustomer cancelled the order. Order removed from database."
-    try:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    if TELEGRAM_BOT_TOKEN:
         try:
-            loop.run_until_complete(send_status_update(order_id, msg))
-        finally:
-            loop.close()
-    except Exception:
-        pass
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(send_status_update(order_id, msg))
+            finally:
+                loop.close()
+        except Exception:
+            pass
     return jsonify({"message": "Order cancelled and removed", "status": "deleted"})
 
 @app.route("/api/confirm-delivered/<order_id>", methods=["POST"])
@@ -726,16 +715,17 @@ def admin_reject():
         db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
 
     msg = f"❌ <b>Order #{order_id} REJECTED</b>\nAdmin rejected this order. Order removed from database."
-    try:
-        import asyncio
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+    if TELEGRAM_BOT_TOKEN:
         try:
-            loop.run_until_complete(send_status_update(order_id, msg))
-        finally:
-            loop.close()
-    except Exception:
-        pass
+            import asyncio
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(send_status_update(order_id, msg))
+            finally:
+                loop.close()
+        except Exception:
+            pass
     return jsonify({"message": "Order rejected and removed", "status": "deleted"})
 
 @app.route("/api/admin-delivered", methods=["POST"])
@@ -761,16 +751,17 @@ def admin_delivered():
         if row["user_confirmed_delivered"] == 1:
             db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
             msg = f"🎉 <b>Order #{order_id} DELIVERED & CLOSED</b>\nBoth parties confirmed. Order removed."
-            try:
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            if TELEGRAM_BOT_TOKEN:
                 try:
-                    loop.run_until_complete(send_status_update(order_id, msg))
-                finally:
-                    loop.close()
-            except Exception:
-                pass
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        loop.run_until_complete(send_status_update(order_id, msg))
+                    finally:
+                        loop.close()
+                except Exception:
+                    pass
             return jsonify({"message": "Order delivered and removed", "status": "deleted"})
         else:
             db.execute("UPDATE orders SET status='admin_delivered' WHERE order_id=?", (order_id,))
@@ -779,16 +770,22 @@ def admin_delivered():
                 "status": "admin_delivered"
             })
 
+# ─── NEW Webhook route (fresh bot per request) ──────────────────
 @app.route("/telegram-webhook", methods=["POST"])
 def telegram_webhook():
     try:
         raw = request.json
+        # Use the global telegram_bot only for deserialization (safe)
         update = Update.de_json(raw, telegram_bot)
         if update and update.message and update.message.text:
+            async def run():
+                # Create a fresh bot instance for this request
+                async with Bot(token=TELEGRAM_BOT_TOKEN) as bot:
+                    await process_update_async(update, bot)
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                loop.run_until_complete(process_update_async(update))
+                loop.run_until_complete(run())
             finally:
                 loop.close()
     except Exception as e:
