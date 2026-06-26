@@ -774,9 +774,9 @@
       vertical-align: middle;
       letter-spacing: 0.3px;
     }
-    .op-mtn      { background: #FFC300; color: #141008; }
+    .op-mtn      { background: #FFC300; color: #000; }
     .op-telecel  { background: #E30613; color: #fff; }
-    .op-airteltigo { background: #0057A8; color: #fff; }
+    .op-airteltigo { background: #fff; color: #000; border: 1px solid #ddd; }
     .op-unknown  { background: #555;    color: #fff; }
 
     /* ─── Improved Mobile (≤480px) ──────────────────────────────── */
@@ -1779,11 +1779,14 @@
     function operatorBadge(op) {
       if (!op || op === 'Unknown') return '';
       const name = op.toLowerCase();
-      let cls = 'op-unknown';
-      if (name.includes('mtn'))        cls = 'op-mtn';
-      else if (name.includes('telecel') || name.includes('vodafone')) cls = 'op-telecel';
-      else if (name.includes('airtel') || name.includes('tigo'))     cls = 'op-airteltigo';
-      return `<span class="operator-badge ${cls}">${op}</span>`;
+      if (name.includes('mtn')) {
+        return `<span class="operator-badge op-mtn">MTN</span>`;
+      } else if (name.includes('telecel') || name.includes('vodafone')) {
+        return `<span class="operator-badge op-telecel">Telecel</span>`;
+      } else if (name.includes('airtel') || name.includes('tigo')) {
+        return `<span class="operator-badge op-airteltigo"><span style="color:#0057A8;font-weight:800;">A</span><span style="color:#E30613;font-weight:800;">T</span></span>`;
+      }
+      return `<span class="operator-badge op-unknown">${op}</span>`;
     }
 
     function showModal(result, body) {
