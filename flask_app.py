@@ -288,14 +288,15 @@ def process_update_sync(update):
 
 
 def telegram_worker():
-    """Background thread worker – processes updates from the queue."""
     print(Fore.GREEN + "[Waakye] Telegram worker thread started")
     while True:
         try:
             update = telegram_queue.get(timeout=1)
             if update is None:
                 break
+            print(Fore.CYAN + "[Waakye] Worker picked up update, processing...")
             process_update_sync(update)
+            print(Fore.CYAN + "[Waakye] Worker done processing")
         except queue.Empty:
             continue
         except Exception as e:
