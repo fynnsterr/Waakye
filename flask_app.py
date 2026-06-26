@@ -198,6 +198,11 @@ telegram_queue = queue.Queue()
 
 def process_update_sync(update):
     """Synchronous handler – runs in the background worker thread."""
+    import asyncio
+
+    def send(chat_id, text):
+        asyncio.run(telegram_bot.send_message(chat_id=chat_id, text=text))
+
     try:
         print(Fore.CYAN + "[Waakye] Processing update in background thread")
         if not update.message or not update.message.text:
@@ -207,7 +212,7 @@ def process_update_sync(update):
         print(Fore.CYAN + f"[Waakye] Chat ID: {chat_id}")
 
         if chat_id not in TELEGRAM_CHAT_IDS:
-            telegram_bot.send_message(chat_id=chat_id, text="You are not authorized to use this bot.")
+            send(chat_id, "You are not authorized to use this bot.")
             return
 
         text = update.message.text.strip().upper()
@@ -215,7 +220,7 @@ def process_update_sync(update):
         print(Fore.CYAN + f"[Waakye] Command: {parts}")
 
         if len(parts) < 2:
-            telegram_bot.send_message(chat_id=chat_id, text="Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
+            send(chat_id, "Usage: CONFIRM <order_id>, REJECT <order_id>, or DELIVERED <order_id>")
             return
 
         command = parts[0]
@@ -227,42 +232,31 @@ def process_update_sync(update):
                     "SELECT status, admin_confirms FROM orders WHERE order_id=?",
                     (order_id,)
                 ).fetchone()
-
                 if not row:
-                    telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    send(chat_id, f"❌ Order #{order_id} not found")
                     return
                 if row["status"] not in ("pending",):
-                    telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                    send(chat_id, f"Order is already {row['status']}")
                     return
-
                 confirmed_ids = set(filter(None, row["admin_confirms"].split(",")))
                 confirmed_ids.add(chat_id)
-                new_confirms = ",".join(confirmed_ids)
-
                 db.execute(
                     "UPDATE orders SET admin_confirms=?, status='confirmed' WHERE order_id=?",
-                    (new_confirms, order_id)
+                    (",".join(confirmed_ids), order_id)
                 )
-
-            telegram_bot.send_message(chat_id=chat_id, text=f"✅ Order #{order_id} CONFIRMED")
+            send(chat_id, f"✅ Order #{order_id} CONFIRMED")
 
         elif command == "REJECT":
             with get_db() as db:
-                row = db.execute(
-                    "SELECT status FROM orders WHERE order_id=?",
-                    (order_id,)
-                ).fetchone()
-
+                row = db.execute("SELECT status FROM orders WHERE order_id=?", (order_id,)).fetchone()
                 if not row:
-                    telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    send(chat_id, f"❌ Order #{order_id} not found")
                     return
                 if row["status"] not in ("pending",):
-                    telegram_bot.send_message(chat_id=chat_id, text=f"Order is already {row['status']}")
+                    send(chat_id, f"Order is already {row['status']}")
                     return
-
                 db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-
-            telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} REJECTED and removed")
+            send(chat_id, f"❌ Order #{order_id} REJECTED and removed")
 
         elif command == "DELIVERED":
             with get_db() as db:
@@ -270,32 +264,28 @@ def process_update_sync(update):
                     "SELECT status, user_confirmed_delivered FROM orders WHERE order_id=?",
                     (order_id,)
                 ).fetchone()
-
                 if not row:
-                    telegram_bot.send_message(chat_id=chat_id, text=f"❌ Order #{order_id} not found")
+                    send(chat_id, f"❌ Order #{order_id} not found")
                     return
-
                 if row["status"] != "confirmed":
-                    telegram_bot.send_message(chat_id=chat_id, text=f"Order is currently '{row['status']}', not ready for delivery confirmation")
+                    send(chat_id, f"Order is currently '{row['status']}', not ready for delivery confirmation")
                     return
-
                 if row["user_confirmed_delivered"] == 1:
                     db.execute("DELETE FROM orders WHERE order_id=?", (order_id,))
-                    telegram_bot.send_message(chat_id=chat_id, text=f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
+                    send(chat_id, f"🎉 Order #{order_id} DELIVERED & CLOSED\nBoth parties confirmed. Order removed.")
                 else:
-                    db.execute(
-                        "UPDATE orders SET status='admin_delivered' WHERE order_id=?",
-                        (order_id,)
-                    )
-                    telegram_bot.send_message(chat_id=chat_id, text=f"Delivery recorded. Waiting for customer to confirm on the tracking page.")
+                    db.execute("UPDATE orders SET status='admin_delivered' WHERE order_id=?", (order_id,))
+                    send(chat_id, "Delivery recorded. Waiting for customer to confirm on the tracking page.")
         else:
-            telegram_bot.send_message(chat_id=chat_id, text="Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
+            send(chat_id, "Unknown command. Use: CONFIRM, REJECT, or DELIVERED")
 
     except Exception as e:
         print(Fore.RED + f"[Waakye] Process update error: {e}")
         import traceback
         traceback.print_exc()
 
+
+        
 def telegram_worker():
     """Background thread worker – processes updates from the queue."""
     print(Fore.GREEN + "[Waakye] Telegram worker thread started")
