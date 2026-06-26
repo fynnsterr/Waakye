@@ -18,6 +18,22 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from telegram.error import TelegramError
 import asyncio
 import threading
+import queue  # not needed
+
+# ─── Background event loop ────────────────────────────────────
+_loop = asyncio.new_event_loop()
+_thread = threading.Thread(target=_loop.run_forever, daemon=True)
+_thread.start()
+
+def run_async(coro):
+    """Submit a coroutine to the background event loop."""
+    return asyncio.run_coroutine_threadsafe(coro, _loop)
+
+
+# ─── Start the background worker thread ──────────────────────
+_worker_thread = threading.Thread(target=telegram_worker, daemon=True)
+_worker_thread.start()
+print(Fore.GREEN + "[Waakye] Telegram worker thread started")
 
 # ─── Create a background event loop that runs forever ────────
 _loop = asyncio.new_event_loop()
@@ -977,16 +993,14 @@ def admin_delivered():
 
 @app.route("/telegram-webhook", methods=["POST"])
 def telegram_webhook():
-    """Webhook endpoint for Telegram bot updates."""
     try:
         update = Update.de_json(request.json, telegram_bot)
-        # Fire and forget – do NOT wait for completion
+        # Fire and forget – no waiting
         run_async(handle_telegram_message(update, None))
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
         traceback.print_exc()
-    # Respond immediately to avoid Telegram timeout
     return "OK", 200
 
 
