@@ -1316,7 +1316,7 @@
             Place Order →
           </button>
 
-          <button class="order-btn" id="trackRecentBtn" style="display:none;background:var(--dark);color:var(--gold);margin-top:12px;" onclick="window.location.href='/track'">
+          <button class="order-btn" id="trackRecentBtn" style="display:none;background:var(--dark);color:var(--gold);margin-top:12px;" onclick="window.location.href='/track?phone='+encodeURIComponent(document.getElementById('custPhone').value.trim())">
             🔍 Track Orders
           </button>
 
@@ -1343,7 +1343,7 @@
           📋 Copy Order ID
         </button>
       </div>
-      <button class="modal-action-btn" style="width:100%;background:var(--gold);color:var(--dark);margin-bottom:12px;" onclick="window.location.href='/track'">
+      <button class="modal-action-btn" style="width:100%;background:var(--gold);color:var(--dark);margin-bottom:12px;" onclick="window.location.href='/track?phone='+encodeURIComponent(document.getElementById('custPhone').value.trim())">
           🔍 Track Your Orders
       </button>
       <div class="copy-feedback" id="copyFeedback">Copied to clipboard!</div>

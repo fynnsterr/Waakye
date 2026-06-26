@@ -423,15 +423,10 @@
         View My Orders
       </button>
 
-      <!-- Weekly quota bar (shown after lookup) -->
-      <div class="quota-wrap" id="quotaWrap">
-        <div class="quota-label">
-          <span>Orders this week</span>
-          <span id="quotaText">0 / 5</span>
-        </div>
-        <div class="quota-bar-bg">
-          <div class="quota-bar-fill" id="quotaFill" style="width:0%"></div>
-        </div>
+      <!-- Weekly quota bar (hidden from customers) -->
+      <div id="quotaWrap" style="display:none">
+        <div id="quotaText"></div>
+        <div><div id="quotaFill"></div></div>
       </div>
     </div>
 
