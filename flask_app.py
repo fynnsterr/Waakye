@@ -796,9 +796,12 @@ def admin_delivered():
 @app.route("/telegram-webhook", methods=["POST"])
 def telegram_webhook():
     try:
-        update = Update.de_json(request.json, telegram_bot)
-        # Put the update in the queue – returns immediately
+        raw = request.json
+        print(Fore.CYAN + f"[Waakye] Webhook received: {raw}")
+        update = Update.de_json(raw, telegram_bot)
+        print(Fore.CYAN + f"[Waakye] Update parsed: {update.update_id}")
         telegram_queue.put(update)
+        print(Fore.CYAN + f"[Waakye] Update queued")
     except Exception as e:
         print(Fore.RED + f"[Waakye] Webhook error: {e}")
         import traceback
